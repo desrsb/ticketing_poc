@@ -1,0 +1,419 @@
+:root {
+  --color-bg: #ddc79a;
+  --color-bg-alt: #d3ba86;
+  --color-surface: #fbf6ec;
+  --color-surface-raised: #f6efe0;
+  --color-text: #3a2414;
+  --color-text-muted: #6f5c46;
+  --color-gold: #b3781a;
+  --color-gold-soft: #8f5c12;
+  --color-vermillion: #a5320a;
+  --color-error: #b3261e;
+  --color-wine: #6d1f2c;
+  --font-display: 'Cormorant Garamond', Georgia, serif;
+  --font-body: 'Work Sans', -apple-system, sans-serif;
+  --radius: 10px;
+}
+
+* { box-sizing: border-box; }
+
+.hidden { display: none !important; }
+
+body {
+  margin: 0;
+  color: var(--color-text);
+  font-family: var(--font-body);
+  line-height: 1.55;
+  /* Faint watermark: guru.jpg washed out by a near-opaque beige layer,
+     fixed so it stays centred while the page scrolls. */
+  background-color: var(--color-bg);
+  background-image:
+    linear-gradient(rgba(221, 199, 154, 0.96), rgba(221, 199, 154, 0.96)),
+    url("guru.jpg");
+  background-repeat: no-repeat, no-repeat;
+  background-position: center, center top;
+  background-attachment: fixed, fixed;
+  background-size: cover, min(78vw, 540px) auto;
+}
+
+h1, h2, h3 {
+  font-family: var(--font-display);
+  font-weight: 600;
+  margin: 0 0 0.4em;
+}
+
+/* ---------- Hero ---------- */
+.hero {
+  padding: 4rem 1.5rem 3rem;
+  text-align: center;
+}
+.hero-inner { max-width: 640px; margin: 0 auto; }
+.org-logo {
+  display: block;
+  width: 100%;
+  max-width: 408px;
+  height: auto;
+  margin: 0 auto 1.5rem;
+  border-radius: var(--radius);
+  border: 1px solid rgba(232, 163, 61, 0.4);
+  box-shadow: 0 8px 28px rgba(0, 0, 0, 0.35);
+}
+.arch-motif { width: 90px; height: 54px; color: var(--color-gold); margin-bottom: 1rem; }
+.eyebrow {
+  text-transform: uppercase;
+  letter-spacing: 0.14em;
+  font-size: 0.78rem;
+  color: var(--color-gold-soft);
+  margin: 0 0 0.5rem;
+}
+.hero h1 {
+  font-size: clamp(2.5rem, 6.8vw, 3.9rem);
+  color: var(--color-wine);
+}
+.hero-sub {
+  color: var(--color-text-muted);
+  font-size: 1.05rem;
+  max-width: 46ch;
+  margin: 0.8rem auto 0;
+}
+
+.flame-divider {
+  display: flex;
+  justify-content: center;
+  color: var(--color-vermillion);
+  opacity: 0.7;
+  margin: 0.5rem 0;
+}
+.flame-divider svg { width: 20px; height: 20px; fill: currentColor; }
+
+main {
+  max-width: 900px;
+  margin: 0 auto;
+  padding: 0 1.5rem 4rem;
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 0;
+}
+
+section { padding: 2.5rem 0; }
+.section-hint { color: var(--color-text-muted); margin: -0.4rem 0 1.4rem; font-size: 0.95rem; }
+
+/* ---------- Seva grid ---------- */
+.seva-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+  gap: 1rem;
+}
+.seva-card {
+  background: var(--color-surface);
+  border: 1px solid rgba(232, 163, 61, 0.18);
+  border-radius: var(--radius);
+  padding: 1.1rem 1.2rem;
+  transition: border-color 0.2s ease, transform 0.15s ease;
+}
+.seva-card:hover { border-color: rgba(232, 163, 61, 0.5); transform: translateY(-2px); }
+.seva-select {
+  display: flex;
+  align-items: center;
+  gap: 0.55rem;
+  cursor: pointer;
+  margin: 0 0 0.25rem;
+}
+.seva-select input[type="checkbox"] {
+  width: 18px;
+  height: 18px;
+  accent-color: var(--color-gold);
+  cursor: pointer;
+  flex-shrink: 0;
+}
+.seva-select h4 { margin: 0; }
+.seva-card h4 { font-family: var(--font-display); font-size: 1.25rem; margin: 0 0 0.25rem; color: var(--color-gold-soft); }
+.seva-card p.desc { color: var(--color-text-muted); font-size: 0.88rem; margin: 0 0 0.7rem; min-height: 2.4em; }
+.seva-card .price { font-weight: 600; color: var(--color-text); margin-bottom: 0.7rem; }
+.qty-control {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+}
+.qty-control button {
+  width: 32px; height: 32px;
+  border-radius: 50%;
+  border: 1px solid var(--color-gold);
+  background: transparent;
+  color: var(--color-gold);
+  font-size: 1.1rem;
+  cursor: pointer;
+  line-height: 1;
+}
+.qty-control button:hover { background: var(--color-gold); color: var(--color-bg); }
+.qty-control input {
+  width: 40px;
+  text-align: center;
+  background: var(--color-bg-alt);
+  border: 1px solid rgba(232, 163, 61, 0.3);
+  border-radius: 6px;
+  color: var(--color-text);
+  padding: 0.35rem 0;
+  font-size: 1rem;
+}
+
+/* ---------- Order summary ---------- */
+.order-summary {
+  background: var(--color-surface-raised);
+  border-radius: var(--radius);
+  padding: 1.4rem 1.5rem;
+  margin: 1.5rem 0 0;
+  border: 1px solid rgba(232, 163, 61, 0.25);
+}
+.order-summary h3 { color: var(--color-gold); font-size: 1.15rem; }
+.summary-list { list-style: none; margin: 0; padding: 0; }
+.summary-list li {
+  display: flex;
+  justify-content: space-between;
+  padding: 0.35rem 0;
+  font-size: 0.95rem;
+  border-bottom: 1px dashed rgba(244, 236, 221, 0.12);
+}
+.summary-empty { color: var(--color-text-muted); border-bottom: none !important; font-style: italic; }
+.summary-total {
+  display: flex;
+  justify-content: space-between;
+  font-family: var(--font-display);
+  font-size: 1.3rem;
+  color: var(--color-gold);
+  margin-top: 0.8rem;
+  padding-top: 0.6rem;
+  border-top: 1px solid rgba(232, 163, 61, 0.3);
+}
+
+/* ---------- Form ---------- */
+/* Honeypot spam trap: positioned off-screen (not display:none, which some
+   bots detect and skip) and removed from tab order, so real visitors never
+   see or reach it, but simple auto-fill bots still fill it in. */
+.hp-field {
+  position: absolute;
+  left: -9999px;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+}
+.field { margin-bottom: 1.1rem; display: flex; flex-direction: column; gap: 0.35rem; }
+.field label { font-size: 0.9rem; color: var(--color-text-muted); }
+.field input, .field textarea, .field select {
+  background: var(--color-surface);
+  border: 1px solid rgba(232, 163, 61, 0.25);
+  border-radius: 8px;
+  padding: 0.65rem 0.8rem;
+  color: var(--color-text);
+  font-family: var(--font-body);
+  font-size: 1rem;
+}
+.field input:focus, .field textarea:focus, .field select:focus {
+  outline: 2px solid var(--color-gold);
+  outline-offset: 1px;
+}
+.field select { max-width: 120px; }
+.field-label { font-size: 0.9rem; color: var(--color-text-muted); }
+.radio-row { display: flex; gap: 1.4rem; margin-top: 0.15rem; }
+.radio-opt { display: flex; align-items: center; gap: 0.4rem; color: var(--color-text); font-size: 0.95rem; cursor: pointer; }
+.radio-opt input[type="radio"] { accent-color: var(--color-gold); width: 16px; height: 16px; cursor: pointer; }
+.checkbox-field { flex-direction: row; align-items: flex-start; gap: 0.6rem; }
+.checkbox-field input { margin-top: 0.25rem; }
+.checkbox-field label { font-size: 0.85rem; }
+.form-error {
+  color: var(--color-error);
+  font-size: 0.9rem;
+  min-height: 1.2em;
+  margin: 0.5rem 0 0;
+}
+
+/* ---------- Locked sections (before a seva is selected) ---------- */
+.lock-hint {
+  display: none;
+  color: var(--color-gold-soft);
+  background: rgba(232, 163, 61, 0.1);
+  border: 1px solid rgba(232, 163, 61, 0.3);
+  border-radius: 8px;
+  padding: 0.7rem 0.9rem;
+  font-size: 0.9rem;
+  margin: -0.6rem 0 1.2rem;
+}
+.locked { opacity: 0.45; filter: grayscale(40%); transition: opacity 0.3s ease, filter 0.3s ease; }
+.locked #details-form,
+.locked .payment-methods { pointer-events: none; }
+.locked .lock-hint { display: block; }
+
+/* ---------- Payment ---------- */
+.payment-section { text-align: center; }
+.payment-methods {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 0.9rem;
+  max-width: 480px;
+  margin: 0 auto;
+}
+.pay-btn {
+  flex: 1 1 200px;
+  padding: 0.85rem 1.2rem;
+  border-radius: 8px;
+  font-family: var(--font-body);
+  font-weight: 600;
+  font-size: 1rem;
+  cursor: pointer;
+  border: 1px solid transparent;
+  transition: transform 0.15s ease, filter 0.15s ease;
+}
+.pay-btn:hover { transform: translateY(-2px); }
+.pay-btn:active { transform: translateY(0); }
+.pay-btn-paypal { background: #ffc439; color: #1a1030; }
+.pay-btn-paypal:hover { filter: brightness(1.05); }
+.pay-btn-bank {
+  background: var(--color-surface-raised);
+  color: var(--color-gold-soft);
+  border-color: var(--color-gold);
+}
+.pay-btn-bank:hover { background: var(--color-gold); color: var(--color-bg); }
+
+.bank-details {
+  max-width: 480px;
+  margin: 1.2rem auto 0;
+  background: var(--color-surface);
+  border: 1px dashed rgba(232, 163, 61, 0.4);
+  border-radius: var(--radius);
+  padding: 1.2rem 1.4rem;
+  text-align: left;
+}
+.bank-fields { display: grid; grid-template-columns: auto 1fr; gap: 0.4rem 1rem; margin: 0; }
+.bank-fields dt { color: var(--color-text-muted); font-size: 0.85rem; }
+.bank-fields dd { margin: 0; font-weight: 600; }
+.pay-btn-confirm {
+  width: 100%;
+  max-width: 480px;
+  margin: 1.2rem auto 0;
+  background: var(--color-gold);
+  color: var(--color-bg);
+  border: none;
+}
+.pay-btn-confirm:hover { filter: brightness(1.08); }
+
+.payment-status { color: var(--color-text-muted); font-size: 0.9rem; margin-top: 0.8rem; min-height: 1.2em; }
+
+/* ---------- Confirmation ---------- */
+.confirmation { text-align: center; padding: 3rem 0; }
+.confirm-icon { width: 56px; height: 56px; color: var(--color-gold); margin-bottom: 0.8rem; }
+.confirmation-order-id { color: var(--color-text-muted); font-size: 0.85rem; }
+.qr-card {
+  display: inline-block;
+  background: #ffffff;
+  padding: 1rem;
+  border-radius: var(--radius);
+  margin-top: 1.4rem;
+}
+.qr-code { display: block; width: 220px; height: 220px; }
+.qr-hint { color: var(--color-text); font-size: 0.85rem; margin: 0.6rem 0 0; }
+
+footer {
+  text-align: center;
+  padding: 2rem 1.5rem 3rem;
+  color: var(--color-text-muted);
+  font-size: 0.82rem;
+}
+footer p { margin: 0.3rem 0; }
+.privacy-note { max-width: 60ch; margin: 0.6rem auto 0; opacity: 0.75; }
+
+/* ---------- Check-in page (checkin.html) ---------- */
+.checkin-main {
+  min-height: 100vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 2rem 1.2rem;
+}
+.checkin-card {
+  max-width: 420px;
+  width: 100%;
+  background: var(--color-surface);
+  border: 1px solid rgba(232, 163, 61, 0.3);
+  border-radius: var(--radius);
+  padding: 2rem 1.6rem;
+  text-align: center;
+}
+.checkin-card .confirm-icon { width: 48px; height: 48px; color: var(--color-gold); margin-bottom: 0.6rem; }
+.checkin-participants { color: var(--color-gold-soft); font-weight: 600; margin: 0.3rem 0 1rem; }
+.checkin-sevas { list-style: none; margin: 0 0 1rem; padding: 0; text-align: left; }
+.checkin-sevas li {
+  display: flex;
+  justify-content: space-between;
+  padding: 0.35rem 0;
+  font-size: 0.95rem;
+  border-bottom: 1px dashed rgba(244, 236, 221, 0.12);
+}
+.checkin-total { font-family: var(--font-display); font-size: 1.25rem; color: var(--color-gold); margin: 0 0 0.9rem; }
+.checkin-status {
+  display: inline-block;
+  padding: 0.3rem 0.9rem;
+  border-radius: 999px;
+  font-size: 0.85rem;
+  font-weight: 600;
+  margin-bottom: 0.9rem;
+}
+.checkin-status-pending { background: rgba(232, 163, 61, 0.2); color: var(--color-gold-soft); }
+.checkin-status-not_required,
+.checkin-status-confirmed { background: rgba(120, 200, 140, 0.2); color: #a8e6b3; }
+
+/* ---------- Admin dashboard (admin.html) ---------- */
+.admin-main { max-width: 1100px; margin: 0 auto; padding: 2rem 1.5rem 4rem; }
+.admin-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 1.5rem; }
+.admin-header h1 { font-size: clamp(1.6rem, 4vw, 2.2rem); color: var(--color-gold); margin: 0; }
+
+.admin-btn {
+  font-family: var(--font-body);
+  font-weight: 600;
+  font-size: 0.9rem;
+  border-radius: 8px;
+  padding: 0.55rem 1rem;
+  cursor: pointer;
+  border: 1px solid transparent;
+  transition: filter 0.15s ease, background 0.15s ease;
+}
+.admin-btn-primary { background: var(--color-gold); color: var(--color-bg); border: none; }
+.admin-btn-primary:hover { filter: brightness(1.08); }
+.admin-btn-ghost { background: transparent; color: var(--color-gold-soft); border-color: var(--color-gold); }
+.admin-btn-ghost:hover { background: var(--color-gold); color: var(--color-bg); }
+.admin-btn-sm { padding: 0.35rem 0.7rem; font-size: 0.82rem; }
+.admin-btn:disabled { opacity: 0.6; cursor: default; }
+
+.admin-login { max-width: 380px; margin: 3rem auto 0; background: var(--color-surface); border: 1px solid rgba(232,163,61,0.25); border-radius: var(--radius); padding: 2rem 1.6rem; }
+.admin-login h2 { color: var(--color-gold-soft); }
+.admin-login-form .admin-btn-primary { width: 100%; margin-top: 0.4rem; }
+
+.admin-summary { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 1rem; margin-bottom: 1.5rem; }
+.admin-stat { background: var(--color-surface); border: 1px solid rgba(232,163,61,0.2); border-radius: var(--radius); padding: 1rem 1.2rem; display: flex; flex-direction: column; gap: 0.2rem; }
+.admin-stat-num { font-family: var(--font-display); font-size: 1.6rem; color: var(--color-text); }
+.admin-stat-pct { font-family: var(--font-body); font-size: 0.9rem; color: var(--color-text-muted); }
+.admin-stat-label { font-size: 0.8rem; color: var(--color-text-muted); }
+.admin-stat-good .admin-stat-num { color: #a8e6b3; }
+.admin-stat-warn .admin-stat-num { color: var(--color-gold-soft); }
+
+.admin-toolbar { display: flex; align-items: center; justify-content: space-between; gap: 1rem; flex-wrap: wrap; margin-bottom: 0.8rem; }
+.admin-filters { display: flex; gap: 0.5rem; flex-wrap: wrap; }
+.admin-chip { background: transparent; border: 1px solid rgba(232,163,61,0.3); color: var(--color-text-muted); border-radius: 999px; padding: 0.35rem 0.9rem; font-size: 0.85rem; cursor: pointer; }
+.admin-chip.is-active { background: var(--color-gold); color: var(--color-bg); border-color: var(--color-gold); font-weight: 600; }
+
+.admin-status { color: var(--color-text-muted); font-size: 0.9rem; }
+.admin-table-wrap { overflow-x: auto; }
+.admin-table { width: 100%; border-collapse: collapse; font-size: 0.88rem; }
+.admin-table th, .admin-table td { text-align: left; padding: 0.6rem 0.7rem; border-bottom: 1px solid rgba(244,236,221,0.1); vertical-align: top; }
+.admin-table th { color: var(--color-gold-soft); font-weight: 600; white-space: nowrap; }
+.admin-contact { color: var(--color-text-muted); font-size: 0.82rem; }
+.admin-empty { text-align: center; color: var(--color-text-muted); font-style: italic; padding: 1.5rem 0; }
+
+.badge { display: inline-block; padding: 0.2rem 0.6rem; border-radius: 999px; font-size: 0.78rem; font-weight: 600; white-space: nowrap; }
+.badge-paid { background: rgba(120,200,140,0.2); color: #a8e6b3; }
+.badge-pending { background: rgba(232,163,61,0.2); color: var(--color-gold-soft); }
+.badge-free { background: rgba(195,180,221,0.2); color: var(--color-text-muted); }
+
+@media (prefers-reduced-motion: reduce) {
+  .seva-card { transition: none; }
+}

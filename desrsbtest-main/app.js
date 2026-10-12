@@ -1,0 +1,488 @@
+// =====================================================================
+// 1. CONFIGURATION — replace every placeholder in this section
+// =====================================================================
+
+// Firebase config lives in firebase-config.js (shared with checkin.js).
+// GOOGLE_SCRIPT_URL and EVENT_NAME live in config.js (shared with admin.js).
+
+// Temporary payment link — a plain paypal.me link, until a proper PayPal
+// Business "Smart Buttons" client-id is set up (see SETUP_INSTRUCTIONS.md,
+// section 3).
+const PAYPAL_ME_USERNAME = "sameerchilmattur";
+
+// PLACEHOLDER bank details — replace with the real account before going live.
+// Shown to registrants who choose "Pay via Bank Transfer".
+const BANK_DETAILS = {
+  holder: "DE SRS Brundavan e.V.",
+  iban: "DE00 1234 5678 9012 3456 00",
+  bic: "TESTDEFFXXX"
+};
+
+// The list of sevas on offer. Edit freely — add, remove, rename, reprice.
+const SEVAS = [
+  { id: "tbd-seva",       name: "TBD Seva",           desc: "Special seva to be decided.",                        price: 501 },
+  { id: "sarvaseva",      name: "Sarvaseva",          desc: "Complete seva covering all rituals of the day.",     price: 251 },
+  { id: "kanakabhisheka", name: "Kanakabhisheka",     desc: "Golden abhisheka offering to the deity.",             price: 151 },
+  { id: "pallaki",        name: "Pallaki",            desc: "Palanquin procession seva for the deity.",           price: 121 },
+  { id: "annadaana",      name: "Annadaana",          desc: "Sponsor the community meal (prasadam).",             price: 101 },
+  { id: "panchamrutha",   name: "Panchamrutha",       desc: "Abhisheka with the five sacred nectars.",            price: 75 },
+  { id: "paada-pooje",    name: "Paada Pooje",        desc: "Worship offered at the holy feet.",                  price: 51 },
+  { id: "pushpalankara",  name: "Pushpalankara",      desc: "Flower decoration offered to the deity.",            price: 31 },
+  { id: "ashothara",      name: "Ashothara",          desc: "108 names chanting offering.",                       price: 21 }
+];
+
+// =====================================================================
+// 2. FIREBASE INITIALIZATION
+// =====================================================================
+
+import { firebaseConfig, RECAPTCHA_V3_SITE_KEY } from "./firebase-config.js";
+import { GOOGLE_SCRIPT_URL, EVENT_NAME } from "./config.js";
+import { initializeApp } from "https://www.gstatic.com/firebasejs/10.13.0/firebase-app.js";
+import {
+  initializeAppCheck,
+  ReCaptchaV3Provider
+} from "https://www.gstatic.com/firebasejs/10.13.0/firebase-app-check.js";
+import {
+  getFirestore,
+  doc,
+  setDoc,
+  serverTimestamp
+} from "https://www.gstatic.com/firebasejs/10.13.0/firebase-firestore.js";
+
+const firebaseApp = initializeApp(firebaseConfig);
+
+// Attaches a reCAPTCHA v3-verified token to every Firestore request from
+// this page, proving it's a real browser session rather than a script
+// hitting the Firestore API directly. Currently in MONITOR mode — the
+// firestore.rules "create" check doesn't require this token yet, so nothing
+// breaks if a token fails to attach. Once App Check metrics in the Firebase
+// Console look healthy, the rule can be tightened to require it.
+initializeAppCheck(firebaseApp, {
+  provider: new ReCaptchaV3Provider(RECAPTCHA_V3_SITE_KEY),
+  isTokenAutoRefreshEnabled: true
+});
+
+const db = getFirestore(firebaseApp);
+
+// =====================================================================
+// 3. STATE
+// =====================================================================
+
+const quantities = {}; // { sevaId: qty }
+SEVAS.forEach(s => (quantities[s.id] = 0));
+
+// =====================================================================
+// 4. RENDER SEVA CARDS
+// =====================================================================
+
+const sevaListEl = document.getElementById("seva-list");
+
+function renderSevas() {
+  sevaListEl.innerHTML = SEVAS.map(seva => `
+    <div class="seva-card">
+      <label class="seva-select">
+        <input type="checkbox" id="select-${seva.id}" data-id="${seva.id}" aria-label="Select ${escapeHtml(seva.name)}">
+        <h4>${escapeHtml(seva.name)}</h4>
+      </label>
+      <p class="desc">${escapeHtml(seva.desc)}</p>
+      <p class="price">€${seva.price.toFixed(2)}</p>
+      <div class="qty-control">
+        <button type="button" data-action="dec" data-id="${seva.id}" aria-label="Decrease ${escapeHtml(seva.name)} quantity">−</button>
+        <input type="number" min="0" value="0" id="qty-${seva.id}" data-id="${seva.id}" aria-label="${escapeHtml(seva.name)} quantity">
+        <button type="button" data-action="inc" data-id="${seva.id}" aria-label="Increase ${escapeHtml(seva.name)} quantity">+</button>
+      </div>
+    </div>
+  `).join("");
+
+  sevaListEl.querySelectorAll("button[data-action]").forEach(btn => {
+    btn.addEventListener("click", () => {
+      const id = btn.dataset.id;
+      const delta = btn.dataset.action === "inc" ? 1 : -1;
+      setQuantity(id, quantities[id] + delta);
+    });
+  });
+
+  sevaListEl.querySelectorAll("input[type=number]").forEach(input => {
+    input.addEventListener("change", () => {
+      const id = input.dataset.id;
+      setQuantity(id, parseInt(input.value, 10) || 0);
+    });
+  });
+
+  sevaListEl.querySelectorAll("input[type=checkbox]").forEach(checkbox => {
+    checkbox.addEventListener("change", () => {
+      const id = checkbox.dataset.id;
+      setQuantity(id, checkbox.checked ? Math.max(1, quantities[id]) : 0);
+    });
+  });
+}
+
+function setQuantity(id, value) {
+  quantities[id] = Math.max(0, value);
+  const input = document.getElementById(`qty-${id}`);
+  if (input) input.value = quantities[id];
+  const checkbox = document.getElementById(`select-${id}`);
+  if (checkbox) checkbox.checked = quantities[id] > 0;
+  renderSummary();
+  updatePaymentMethodVisibility();
+}
+
+// =====================================================================
+// 5. ORDER SUMMARY + TOTAL
+// =====================================================================
+
+const summaryListEl = document.getElementById("summary-list");
+const summaryTotalEl = document.getElementById("summary-total-amount");
+
+function getSelectedSevas() {
+  return SEVAS
+    .filter(s => quantities[s.id] > 0)
+    .map(s => ({ ...s, qty: quantities[s.id], lineTotal: s.price * quantities[s.id] }));
+}
+
+function calculateTotal() {
+  return getSelectedSevas().reduce((sum, s) => sum + s.lineTotal, 0);
+}
+
+function renderSummary() {
+  const selected = getSelectedSevas();
+  if (selected.length === 0) {
+    summaryListEl.innerHTML = `<li class="summary-empty">No sevas selected — free darshana</li>`;
+  } else {
+    summaryListEl.innerHTML = selected.map(s => `
+      <li><span>${escapeHtml(s.name)} × ${s.qty}</span><span>€${s.lineTotal.toFixed(2)}</span></li>
+    `).join("");
+  }
+  summaryTotalEl.textContent = `€${calculateTotal().toFixed(2)}`;
+}
+
+renderSevas();
+renderSummary();
+
+// =====================================================================
+// 6. FORM VALIDATION
+// =====================================================================
+
+const form = document.getElementById("details-form");
+const formErrorEl = document.getElementById("form-error");
+
+function getFormData() {
+  const firstVisitEl = form.querySelector('input[name="firstVisit"]:checked');
+  return {
+    fullName: form.fullName.value.trim(),
+    phone: form.phone.value.trim(),
+    email: form.email.value.trim(),
+    address: form.address.value.trim(),
+    firstVisit: firstVisitEl ? firstVisitEl.value : "",
+    participants: parseInt(form.participants.value, 10) || 1,
+    consent: form.consent.checked,
+    mediaConsent: form.mediaConsent.checked
+  };
+}
+
+// Sevas are optional now: no selection = free darshana. Only the personal
+// details are required.
+function validateForm() {
+  // Honeypot: real visitors never see or fill this field. If it has a
+  // value, silently fail with the same generic message a normal validation
+  // failure would show, so bots don't learn the trap exists.
+  if (form.website.value.trim()) {
+    formErrorEl.textContent = "Please fill in all required fields.";
+    return false;
+  }
+  const data = getFormData();
+  if (!data.fullName || !data.phone || !data.email || !data.address) {
+    formErrorEl.textContent = "Please fill in all required fields.";
+    return false;
+  }
+  if (!/^\S+@\S+\.\S+$/.test(data.email)) {
+    formErrorEl.textContent = "Please enter a valid email address.";
+    return false;
+  }
+  if (!data.firstVisit) {
+    formErrorEl.textContent = "Please tell us whether this is your first visit.";
+    return false;
+  }
+  if (data.participants < 1 || data.participants > 6) {
+    formErrorEl.textContent = "Number of participants must be between 1 and 6.";
+    return false;
+  }
+  if (!data.consent) {
+    formErrorEl.textContent = "Please confirm you agree to the data use note before continuing.";
+    return false;
+  }
+  if (!data.mediaConsent) {
+    formErrorEl.textContent = "Please confirm you agree to the photo and video use before continuing.";
+    return false;
+  }
+  formErrorEl.textContent = "";
+  return true;
+}
+
+// =====================================================================
+// 7. PAYMENT BUTTONS — PayPal link + manual bank transfer
+// =====================================================================
+// No seva selected (total €0) = free darshana: a single "Confirm
+// Registration" button confirms instantly with a QR + email. If any seva is
+// selected, the PayPal / Bank Transfer choice appears; picking either reveals
+// the "Confirm Registration" button, which files a PENDING request (no QR /
+// email) until an organiser confirms the payment in the admin dashboard.
+
+const paymentStatusEl = document.getElementById("payment-status");
+const paymentHintEl = document.getElementById("payment-hint");
+const paymentMethodsEl = document.getElementById("payment-methods");
+const payPaypalBtn = document.getElementById("pay-paypal");
+const payBankBtn = document.getElementById("pay-bank");
+const bankDetailsEl = document.getElementById("bank-details");
+const bankReferenceEl = document.getElementById("bank-reference");
+const confirmFreeBtn = document.getElementById("confirm-free");
+const confirmRegistrationBtn = document.getElementById("confirm-registration");
+
+document.getElementById("bank-holder").textContent = BANK_DETAILS.holder;
+document.getElementById("bank-iban").textContent = BANK_DETAILS.iban;
+document.getElementById("bank-bic").textContent = BANK_DETAILS.bic;
+
+let pendingMethod = null;
+let pendingOrderId = null;
+
+function buildPaypalMeUrl(amount) {
+  return `https://paypal.me/${PAYPAL_ME_USERNAME}/${amount.toFixed(2)}EUR`;
+}
+
+updatePaymentMethodVisibility();
+
+function updatePaymentMethodVisibility() {
+  const hasSeva = getSelectedSevas().length > 0;
+
+  // Seva selected → show payment methods; no seva → show the free confirm button.
+  paymentMethodsEl.classList.toggle("hidden", !hasSeva);
+  confirmFreeBtn.classList.toggle("hidden", hasSeva);
+
+  paymentHintEl.textContent = hasSeva
+    ? "Pay for your seva below, then confirm. We'll email your QR confirmation once we've verified the payment."
+    : "You haven't selected a seva — confirm below to register for a free darshana and get your entrance QR right away.";
+
+  // Reset any in-progress payment step whenever the selection changes.
+  bankDetailsEl.classList.add("hidden");
+  confirmRegistrationBtn.classList.add("hidden");
+  paymentStatusEl.textContent = "";
+  pendingMethod = null;
+  pendingOrderId = null;
+}
+
+confirmFreeBtn.addEventListener("click", () => {
+  if (!validateForm()) {
+    paymentStatusEl.textContent = "Please complete the form above before confirming.";
+    return;
+  }
+  completeRegistration("none", 0);
+});
+
+payPaypalBtn.addEventListener("click", () => {
+  if (!validateForm()) {
+    paymentStatusEl.textContent = "Please complete the form above before paying.";
+    return;
+  }
+  const total = calculateTotal();
+  pendingMethod = "paypal";
+  pendingOrderId = `REG-${Date.now()}`;
+  bankDetailsEl.classList.add("hidden");
+  window.open(buildPaypalMeUrl(total), "_blank", "noopener");
+  paymentStatusEl.textContent = "Complete your payment in the tab that just opened, then click \"Confirm Registration\" below.";
+  confirmRegistrationBtn.classList.remove("hidden");
+});
+
+payBankBtn.addEventListener("click", () => {
+  if (!validateForm()) {
+    paymentStatusEl.textContent = "Please complete the form above before paying.";
+    return;
+  }
+  pendingMethod = "bank_transfer";
+  pendingOrderId = `REG-${Date.now()}`;
+  bankReferenceEl.textContent = pendingOrderId;
+  bankDetailsEl.classList.remove("hidden");
+  confirmRegistrationBtn.classList.remove("hidden");
+  paymentStatusEl.textContent = "Transfer the amount above using the reference shown, then click \"Confirm Registration\" below.";
+  alert("Your registration is pending. You will be confirmed after payment completion.");
+});
+
+confirmRegistrationBtn.addEventListener("click", () => {
+  completeRegistration(pendingMethod, calculateTotal(), pendingOrderId);
+});
+
+// =====================================================================
+// 8. SAVE REGISTRATION — Firestore + confirmation email
+// =====================================================================
+// Neither the paypal.me link nor a bank transfer gives an automated capture
+// step to confirm here. The registration is saved as "pending" and the
+// organiser reconciles payment manually.
+
+function completeRegistration(method, total, orderId = `REG-${Date.now()}`) {
+  const formData = getFormData();
+  const selected = getSelectedSevas();
+  const paymentRequired = total > 0;
+
+  // Saved under the order ID itself (instead of an auto-generated ID) so the
+  // QR code only needs to encode this one reference to look the doc back up.
+  const registration = {
+    fullName: formData.fullName,
+    phone: formData.phone,
+    email: formData.email,
+    address: formData.address,
+    firstVisit: formData.firstVisit,
+    mediaConsent: formData.mediaConsent,
+    participants: formData.participants,
+    sevas: selected.map(s => ({ id: s.id, name: s.name, qty: s.qty, lineTotal: s.lineTotal })),
+    totalAmount: total,
+    currency: "EUR",
+    paymentMethod: paymentRequired ? method : "none",
+    paymentStatus: paymentRequired ? "pending" : "not_required",
+    orderId,
+    createdAt: serverTimestamp()
+  };
+
+  // Points at checkin.html, which looks the registration up by this ID and
+  // displays it — this is what the entrance QR code encodes.
+  const checkinUrl = new URL(`checkin.html?id=${encodeURIComponent(orderId)}`, window.location.href).href;
+
+  // Always save the registration.
+  saveRegistration(registration, orderId);
+
+  if (paymentRequired) {
+    // Paid sevas: the registration is only a REQUEST until an organiser
+    // confirms the payment in the admin dashboard. No QR and no confirmation
+    // email yet — those are sent when the organiser marks it paid.
+    showRequestReceived(orderId, method);
+  } else {
+    // Free Darshana: nothing to pay, so confirm immediately — show the QR
+    // on screen and email the confirmation right away.
+    showConfirmation(orderId, checkinUrl);
+    sendConfirmationEmail(registration, selected, total, orderId, checkinUrl);
+  }
+}
+
+async function saveRegistration(registration, orderId) {
+  try {
+    await setDoc(doc(db, "registrations", orderId), registration);
+  } catch (err) {
+    // The confirmation is already on screen; log so you can reconcile manually.
+    console.error("Firestore write failed:", err);
+  }
+}
+
+async function sendConfirmationEmail(registration, selected, total, orderId, checkinUrl) {
+  // No seva = free darshana; give the email a non-empty summary line.
+  const sevaSummaryText = selected.length
+    ? selected.map(s => `${s.name} x${s.qty} — €${s.lineTotal.toFixed(2)}`).join("\n")
+    : "Free darshana (no seva)";
+
+  try {
+    // Content-Type text/plain avoids a CORS preflight, which Apps Script Web Apps
+    // don't handle. The script itself parses the body as JSON on its side.
+    await fetch(GOOGLE_SCRIPT_URL, {
+      method: "POST",
+      headers: { "Content-Type": "text/plain;charset=utf-8" },
+      body: JSON.stringify({
+        to_name: registration.fullName,
+        to_email: registration.email,
+        event_name: EVENT_NAME,
+        participants: registration.participants,
+        seva_summary: sevaSummaryText,
+        total_amount: total.toFixed(2),
+        payment_status: registration.paymentStatus,
+        order_id: orderId,
+        checkin_url: checkinUrl
+      })
+    });
+  } catch (err) {
+    console.error("Confirmation email send failed:", err);
+  }
+}
+
+// =====================================================================
+// 9. CONFIRMATION VIEW
+// =====================================================================
+
+function hideRegistrationSections() {
+  document.getElementById("sevas").style.display = "none";
+  document.getElementById("order-summary").style.display = "none";
+  document.getElementById("registrant-form").style.display = "none";
+  document.getElementById("payment").style.display = "none";
+}
+
+// Paid registration awaiting the organiser's payment confirmation — no QR yet.
+function showRequestReceived(orderId, method) {
+  hideRegistrationSections();
+
+  document.getElementById("confirmation-heading").textContent = "Registration request received";
+  document.getElementById("confirmation-message").textContent = method === "bank_transfer"
+    ? "Thank you. Once we've received and confirmed your bank transfer, we'll email you a confirmation with your entrance QR code."
+    : "Thank you. Once we've confirmed your PayPal payment, we'll email you a confirmation with your entrance QR code.";
+  document.getElementById("confirmation-order-id").textContent = "Registration reference: " + orderId;
+
+  // No QR until payment is confirmed by an organiser.
+  document.getElementById("confirmation-qr-card").classList.add("hidden");
+
+  const confirmation = document.getElementById("confirmation");
+  confirmation.classList.remove("hidden");
+  confirmation.scrollIntoView({ behavior: "smooth" });
+}
+
+// Free Darshana (or an already-confirmed registration) — show the QR now.
+function showConfirmation(orderId, checkinUrl) {
+  hideRegistrationSections();
+
+  document.getElementById("confirmation-heading").textContent = "Your registration is confirmed";
+  document.getElementById("confirmation-message").textContent = "A confirmation has been sent to your email.";
+  document.getElementById("confirmation-order-id").textContent = "Registration reference: " + orderId;
+
+  document.getElementById("confirmation-qr-card").classList.remove("hidden");
+  renderQrCode(document.getElementById("confirmation-qr"), checkinUrl);
+
+  const confirmation = document.getElementById("confirmation");
+  confirmation.classList.remove("hidden");
+  confirmation.scrollIntoView({ behavior: "smooth" });
+}
+
+// Renders the QR into `container`. Uses the locally-bundled qrcode.min.js
+// (same-origin, works fully offline). If that library somehow isn't present,
+// falls back to a public QR image API so a code still appears.
+function renderQrCode(container, text) {
+  container.innerHTML = "";
+  if (typeof QRCode !== "undefined") {
+    try {
+      new QRCode(container, {
+        text: text,
+        width: 220,
+        height: 220,
+        colorDark: "#000000",
+        colorLight: "#ffffff"
+      });
+      return;
+    } catch (err) {
+      console.error("Local QR render failed, using image fallback:", err);
+    }
+  }
+  const img = document.createElement("img");
+  img.width = 220;
+  img.height = 220;
+  img.alt = "Registration QR code";
+  img.src = `https://api.qrserver.com/v1/create-qr-code/?size=220x220&data=${encodeURIComponent(text)}`;
+  container.appendChild(img);
+}
+
+// =====================================================================
+// 10. UTIL
+// =====================================================================
+
+function escapeHtml(str) {
+  const div = document.createElement("div");
+  div.textContent = str;
+  return div.innerHTML;
+}
+
+// =====================================================================
+// INIT
+// =====================================================================
+// Seva list and summary are rendered above, right after their functions
+// are defined, so they show up even if PayPal/Firebase fail to load.
